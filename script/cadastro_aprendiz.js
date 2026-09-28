@@ -1,3 +1,5 @@
+import { supabase } from './supabaseClient.js';
+
 document.addEventListener("DOMContentLoaded", () => {
   // 1. Carrega os aprendizes do localStorage (se existirem) ou inicia lista vazia
   let apprentices = JSON.parse(localStorage.getItem("stoa_apprentices") || "[]");
@@ -299,4 +301,50 @@ document.addEventListener("DOMContentLoaded", () => {
   // Inicialização
   loadGestoresOptions();
   renderTable();
+});
+
+// Arquivo: cadastro_aprendiz.js
+import { supabase } from './supabaseClient.js';
+
+// Seleciona o formulário ou o botão de cadastro pelo ID do seu HTML
+const formCadastro = document.getElementById('form-aprendiz');
+
+formCadastro.addEventListener('submit', async (evento) => {
+    evento.preventDefault(); // Evita que a página recarregue
+
+    // Pega os valores digitados no HTML
+    const email = document.getElementById('email').value;
+    const senha = document.getElementById('senha').value;
+    const nome = document.getElementById('nome').value;
+    const dataNascimento = document.getElementById('data_nascimento').value;
+
+    try {
+        // 1. Cria o login no sistema do Supabase (Auth)
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+            email: email,
+            password: senha,
+        });
+        if (authError) throw authError;
+
+        const userId = authData.user.id; // Pega o ID único gerado
+
+        // 2. Salva o perfil geral
+        const { error: perfilError } = await supabase.from('perfis').insert([
+            { id: userId, nome_completo: nome, tipo: 'aprendiz' }
+        ]);
+        if (perfilError) throw perfilError;
+
+        // 3. Salva os dados específicos na tabela de aprendizes
+        const { error: aprendizError } = await supabase.from('aprendizes').insert([
+            { id: userId, data_nascimento: dataNascimento }
+        ]);
+        if (aprendizError) throw aprendizError;
+
+        alert('Aprendiz cadastrado com sucesso!');
+        window.location.href = 'login.html'; // Manda para a tela de login
+
+    } catch (error) {
+        alert("Erro no cadastro: " + error.message);
+        console.error(error);
+    }
 });

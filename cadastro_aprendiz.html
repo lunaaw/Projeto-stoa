@@ -14,7 +14,7 @@
 </head>
 <body>
 
-  <!-- TOP BAR (HTML Padrão) -->
+  <!-- TOP BAR -->
   <header class="topbar">
     <a href="dashboard.html" class="topbar-brand" title="Stoa Home">
       <div class="brand-icon">S</div>
@@ -142,7 +142,7 @@
             </tr>
           </thead>
           <tbody id="apprenticeTableBody">
-            <!-- Vazio por padrão -->
+            <!-- Preenchido via JS -->
           </tbody>
         </table>
       </div>
@@ -225,30 +225,9 @@
     </div>
   </div>
 
-  <!-- MODAL 4: Confirmar Senha para Exclusão -->
-  <div class="modal-overlay" id="passwordModal">
-    <div class="modal-card" style="max-width: 400px;">
-      <div class="modal-header">
-        <h3>Confirmação de Segurança</h3>
-        <button type="button" class="btn-close-modal closeModalBtn"><i data-lucide="x"></i></button>
-      </div>
-      <form id="passwordForm">
-        <div class="form-group">
-          <label>Confirme sua senha para remover o aprendiz:</label>
-          <input type="password" id="confirmPasswordInput" required placeholder="••••••••">
-        </div>
-        <div class="modal-actions">
-          <button type="button" class="btn-secondary closeModalBtn">Cancelar</button>
-          <button type="submit" class="btn-danger">Confirmar Exclusão</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- Scripts top bar -->
+  <!-- SCRIPTS DA PÁGINA -->
   <script src="./script/topbar.js"></script>
-  <!-- Script do main -->
-  <script src="./script/cadastro_aprendiz.js"></script>
+  <script type="module" src="./script/cadastro_aprendiz.js"></script>
 
 </body>
 </html>

@@ -1,3 +1,5 @@
+
+import { supabase } from './supabaseClient.js';
 document.addEventListener("DOMContentLoaded", () => {
   // 1. Carrega os gestores do localStorage (se existirem) ou inicia lista vazia
   let managers = JSON.parse(localStorage.getItem("stoa_managers") || "[]");
@@ -227,4 +229,47 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Inicialização
   renderTable();
+});
+
+// Arquivo: cadastro_equipe.js
+import { supabase } from './supabaseClient.js'; 
+
+const formEquipe = document.getElementById('form-equipe');
+
+formEquipe.addEventListener('submit', async (evento) => {
+    evento.preventDefault();
+
+    const email = document.getElementById('email').value;
+    const senha = document.getElementById('senha').value;
+    const nome = document.getElementById('nome').value;
+    const cargo = document.getElementById('cargo').value;
+
+    try {
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+            email: email,
+            password: senha,
+        });
+        if (authError) throw authError;
+
+        const userId = authData.user.id;
+
+        // Salva na tabela geral como 'equipe'
+        const { error: perfilError } = await supabase.from('perfis').insert([
+            { id: userId, nome_completo: nome, tipo: 'equipe' }
+        ]);
+        if (perfilError) throw perfilError;
+
+        // Salva na tabela específica da equipe
+        const { error: equipeError } = await supabase.from('membros_equipe').insert([
+            { id: userId, cargo: cargo }
+        ]);
+        if (equipeError) throw equipeError;
+
+        alert('Membro da equipe cadastrado com sucesso!');
+        window.location.href = 'login.html';
+
+    } catch (error) {
+        alert("Erro no cadastro: " + error.message);
+        console.error(error);
+    }
 });

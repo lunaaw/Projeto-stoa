@@ -1,3 +1,5 @@
+import { supabase } from './supabaseClient.js';
+
 // --- CONTROLE DE ABAS PRINCIPAIS ---
 function showMainTab(tabName) {
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
@@ -134,3 +136,46 @@ function handleFormSubmit(event, type) {
     alert('Autenticando Aprendiz no Supabase...');
     }
 }
+
+// Arquivo: login.js
+import { supabase } from './supabaseClient.js';
+
+const formLogin = document.getElementById('form-login');
+
+formLogin.addEventListener('submit', async (evento) => {
+    evento.preventDefault();
+
+    const email = document.getElementById('email').value;
+    const senha = document.getElementById('senha').value;
+
+    try {
+        // 1. Tenta fazer o login com e-mail e senha
+        const { data, error } = await supabase.auth.signInWithPassword({
+            email: email,
+            password: senha,
+        });
+
+        if (error) throw error;
+
+        // 2. Descobre se é equipe ou aprendiz para redirecionar certo
+        const userId = data.user.id;
+        const { data: perfilData, error: perfilError } = await supabase
+            .from('perfis')
+            .select('tipo')
+            .eq('id', userId)
+            .single();
+
+        if (perfilError) throw perfilError;
+
+        // 3. Redireciona
+        if (perfilData.tipo === 'aprendiz') {
+            window.location.href = 'aprendiz.html'; // Vai pro painel do aprendiz
+        } else if (perfilData.tipo === 'equipe') {
+            window.location.href = 'projetos.html'; // Vai pro painel da equipe
+        }
+
+    } catch (error) {
+        alert("Erro ao entrar: E-mail ou senha incorretos.");
+        console.error(error);
+    }
+});
