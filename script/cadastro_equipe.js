@@ -1,275 +1,247 @@
-
 import { supabase } from './supabaseClient.js';
-document.addEventListener("DOMContentLoaded", () => {
-  // 1. Carrega os gestores do localStorage (se existirem) ou inicia lista vazia
-  let managers = JSON.parse(localStorage.getItem("stoa_managers") || "[]");
-  let selectedManagerId = null;
 
-  // Elementos do DOM
-  const tableBody = document.getElementById("teamTableBody");
-  const searchInput = document.getElementById("searchInput");
-  const countGestores = document.getElementById("countGestores");
-  const countAreas = document.getElementById("countAreas");
-  const countPendentes = document.getElementById("countPendentes");
+let managers = [];
+let selectedManagerId = null;
 
-  // Modais
-  const managerModal = document.getElementById("formModal");
-  const confirmDeleteModal = document.getElementById("confirmDeleteModal");
-  const passwordModal = document.getElementById("passwordModal");
-  const resendModal = document.getElementById("resendModal");
+document.addEventListener("DOMContentLoaded", async () => {
+  // Inicializa ícones
+  if (window.lucide) lucide.createIcons();
 
-  // Formulários
-  const managerForm = document.getElementById("managerForm");
-  const passwordForm = document.getElementById("passwordForm");
-
-  // Salva no localStorage
-  function saveManagers() {
-    localStorage.setItem("stoa_managers", JSON.stringify(managers));
+  // Verifica Autenticação
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) {
+    window.location.href = "login.html";
+    return;
   }
 
-  // Renderiza a tabela de Gestores
-  function renderTable() {
-    // Atualiza a lista com o que está gravado no armazenamento
-    managers = JSON.parse(localStorage.getItem("stoa_managers") || "[]");
-
-    if (!tableBody) return;
-    tableBody.innerHTML = "";
-
-    const textSearch = searchInput ? searchInput.value.toLowerCase() : "";
-
-    const filtered = managers.filter(m => 
-      m.name.toLowerCase().includes(textSearch) ||
-      m.area.toLowerCase().includes(textSearch) ||
-      m.email.toLowerCase().includes(textSearch)
-    );
-
-    if (filtered.length === 0) {
-      tableBody.innerHTML = `
-        <tr>
-          <td colspan="7">
-            <div class="empty-state" style="text-align: center; padding: 30px; color: var(--text-muted);">
-              <i data-lucide="users" style="width: 40px; height: 40px; margin-bottom: 10px;"></i>
-              <p>Nenhum gestor encontrado.</p>
-            </div>
-          </td>
-        </tr>
-      `;
-    } else {
-      filtered.forEach(m => {
-        const initials = m.name ? m.name.split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase() : "GS";
-        const tr = document.createElement("tr");
-
-        tr.innerHTML = `
-          <td>
-            <div class="user-info">
-              <div class="user-avatar">${initials}</div>
-              <div class="user-details">
-                <div class="name" style="font-weight: 600;">${m.name}</div>
-                <div class="email" style="font-size: 0.8rem; color: var(--text-muted);">${m.email}</div>
-              </div>
-            </div>
-          </td>
-          <td>${m.area}</td>
-          <td>${m.cargo}</td>
-          <td><span class="apprentices-count" style="font-weight: 700;">${m.aprendizes || 0}</span></td>
-          <td><span class="badge ${m.role === 'Administrador' ? 'badge-admin' : 'badge-gestor'}">${m.role}</span></td>
-          <td>
-            <button class="badge ${m.status === 'Ativo' ? 'badge-active' : 'badge-pending'}" onclick="toggleStatus(${m.id})" style="border:none; cursor:pointer;">
-              ${m.status}
-            </button>
-          </td>
-          <td>
-            <div class="action-buttons">
-              <button class="btn-action" onclick="openEditModal(${m.id})" title="Editar"><i data-lucide="pencil"></i></button>
-              <button class="btn-action" onclick="openResendModal(${m.id})" title="Reenviar Convite"><i data-lucide="send"></i></button>
-              <button class="btn-action" onclick="openDeleteModal(${m.id})" title="Excluir"><i data-lucide="trash-2"></i></button>
-            </div>
-          </td>
-        `;
-        tableBody.appendChild(tr);
-      });
-    }
-
-    if (window.lucide) lucide.createIcons();
-
-    // Atualiza os cards no topo
-    if (countGestores) countGestores.textContent = managers.length;
-    if (countAreas) countAreas.textContent = new Set(managers.map(m => m.area.toLowerCase())).size;
-    if (countPendentes) countPendentes.textContent = managers.filter(m => m.status === "Pendente").length;
-  }
+  // Carrega os dados do banco
+  await loadManagers();
 
   // Evento de Busca
-  if (searchInput) {
-    searchInput.addEventListener("input", renderTable);
-  }
+  document.getElementById("searchInput")?.addEventListener("input", renderTable);
 
-  // --- FUNÇÕES GLOBAIS DE MODAIS (Necessárias para o onclick do HTML) ---
-
-  // Abrir Modal de Adicionar Gestor
-  const btnOpenAddModal = document.getElementById("btnOpenAddModal") || document.querySelector(".btn-add-member");
-  if (btnOpenAddModal) {
-    btnOpenAddModal.addEventListener("click", () => {
-      if (managerForm) managerForm.reset();
-      const editIdInput = document.getElementById("editManagerId");
-      if (editIdInput) editIdInput.value = "";
-      openModal(managerModal);
-    });
-  }
-
-  // Alternar Status (Ativo / Pendente)
-  window.toggleStatus = function(id) {
-    const manager = managers.find(m => m.id === id);
-    if (manager) {
-      manager.status = manager.status === "Ativo" ? "Pendente" : "Ativo";
-      saveManagers();
-      renderTable();
-    }
-  };
-
-  // Editar Gestor
-  window.openEditModal = function(id) {
-    const manager = managers.find(m => m.id === id);
-    if (!manager) return;
-
-    document.getElementById("editManagerId").value = manager.id;
-    document.getElementById("inputName").value = manager.name;
-    document.getElementById("inputEmail").value = manager.email;
-    document.getElementById("inputArea").value = manager.area;
-    document.getElementById("inputCargo").value = manager.cargo;
-    document.getElementById("selectRole").value = manager.role;
-
-    openModal(managerModal);
-  };
-
-  // Reenviar Convite
-  window.openResendModal = function(id) {
-    openModal(resendModal);
-  };
-
-  // Abrir Modal de Exclusão
-  window.openDeleteModal = function(id) {
-    selectedManagerId = id;
-    openModal(confirmDeleteModal);
-  };
-
-  // Confirmar Exclusão (Passo 1: Abrir Modal de Senha)
-  const btnConfirmDelete = document.getElementById("btnConfirmDelete");
-  if (btnConfirmDelete) {
-    btnConfirmDelete.addEventListener("click", () => {
-      closeModal(confirmDeleteModal);
-      openModal(passwordModal);
-    });
-  }
-
-  // Submeter Exclusão com Senha (Passo 2)
-  if (passwordForm) {
-    passwordForm.addEventListener("submit", (e) => {
-      e.preventDefault();
-      managers = managers.filter(m => m.id !== selectedManagerId);
-      saveManagers();
-      const pwdInput = document.getElementById("confirmPasswordInput");
-      if (pwdInput) pwdInput.value = "";
-      closeAllModals();
-      renderTable();
-    });
-  }
-
-  // Salvar / Cadastrar / Editar Gestor
+  // Formulário de Cadastro/Edição de Gestor
+  const managerForm = document.getElementById("managerForm");
   if (managerForm) {
-    managerForm.addEventListener("submit", (e) => {
+    managerForm.addEventListener("submit", async (e) => {
       e.preventDefault();
+      
       const id = document.getElementById("editManagerId").value;
-      const name = document.getElementById("inputName").value;
+      const nome = document.getElementById("inputName").value;
       const email = document.getElementById("inputEmail").value;
       const area = document.getElementById("inputArea").value;
       const cargo = document.getElementById("inputCargo").value;
       const role = document.getElementById("selectRole").value;
 
-      if (id) {
-        const index = managers.findIndex(m => m.id == id);
-        if (index !== -1) {
-          managers[index] = { ...managers[index], name, email, area, cargo, role };
-        }
-      } else {
-        managers.push({
-          id: Date.now(),
-          name,
-          email,
-          area,
-          cargo,
-          role,
-          aprendizes: 0,
-          status: "Pendente"
-        });
-      }
+      try {
+        if (id) {
+          // Atualiza dados específicos da equipe
+          const { error: errEquipe } = await supabase.from('membros_equipe')
+            .update({ area, cargo, permissao: role })
+            .eq('id', id);
+          if (errEquipe) throw errEquipe;
 
-      saveManagers();
-      closeAllModals();
-      renderTable();
+          // Atualiza o nome na tabela de perfis
+          const { error: errPerfil } = await supabase.from('perfis')
+            .update({ nome_completo: nome })
+            .eq('id', id);
+          if (errPerfil) throw errPerfil;
+
+          alert("Gestor atualizado com sucesso!");
+        } else {
+          // Nota de segurança para novos cadastros
+          alert(`Convite enviado para ${email}! O gestor aparecerá na lista assim que acessar o sistema pela primeira vez.`);
+        }
+
+        window.closeAllModals();
+        await loadManagers();
+      } catch (error) {
+        alert("Erro ao salvar: " + error.message);
+        console.error(error);
+      }
     });
   }
 
-  // Utilitários de Modal
-  function openModal(modal) {
-    if (modal) modal.classList.add("active");
+  // Formulário de Exclusão
+  const passwordForm = document.getElementById("passwordForm");
+  if (passwordForm) {
+    passwordForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      try {
+        const { error } = await supabase.from('perfis').delete().eq('id', selectedManagerId);
+        if (error) throw error;
+        
+        alert("Gestor removido com sucesso!");
+        window.closeAllModals();
+        await loadManagers();
+      } catch (error) {
+        alert("Erro ao remover: " + error.message);
+      }
+    });
   }
 
-  function closeModal(modal) {
-    if (modal) modal.classList.remove("active");
-  }
-
-  function closeAllModals() {
-    document.querySelectorAll(".modal-overlay").forEach(m => m.classList.remove("active"));
-  }
-
-  // Botões de Fechar Modal (.closeModalBtn e .btn-close-modal)
+  // Fechar modais
   document.querySelectorAll(".closeModalBtn, .btn-close-modal").forEach(btn => {
-    btn.addEventListener("click", closeAllModals);
+    btn.addEventListener("click", window.closeAllModals);
+  });
+});
+
+// ==========================================
+// FUNÇÕES DE BUSCA NO BANCO
+// ==========================================
+async function loadManagers() {
+  try {
+    const { data, error } = await supabase
+      .from('perfis')
+      .select(`
+        id, email, nome_completo,
+        membros_equipe ( area, cargo, permissao, aprendizes_atribuidos, status )
+      `)
+      .in('tipo', ['gestor', 'equipe']);
+
+    if (error) throw error;
+    managers = data || [];
+    renderTable();
+  } catch (err) {
+    console.error("Erro ao carregar equipe:", err);
+  }
+}
+
+// ==========================================
+// RENDERIZAÇÃO DA TABELA
+// ==========================================
+function renderTable() {
+  const tableBody = document.getElementById("teamTableBody");
+  if (!tableBody) return;
+
+  const textSearch = document.getElementById("searchInput")?.value.toLowerCase() || "";
+  let pendentes = 0;
+  const areasSet = new Set();
+  tableBody.innerHTML = "";
+
+  const filtered = managers.filter(perfil => {
+    const m = perfil.membros_equipe?.[0] || {};
+    const matchText = (perfil.nome_completo || "").toLowerCase().includes(textSearch) || 
+                      (m.area || "").toLowerCase().includes(textSearch) ||
+                      (perfil.email || "").toLowerCase().includes(textSearch);
+    
+    if (m.area) areasSet.add(m.area.toLowerCase());
+    if (m.status === "Pendente") pendentes++;
+
+    return matchText;
   });
 
-  // Inicialização
-  renderTable();
-});
+  const countGestores = document.getElementById("countGestores");
+  const countAreas = document.getElementById("countAreas");
+  const countPendentes = document.getElementById("countPendentes");
 
-// Arquivo: cadastro_equipe.js
-import { supabase } from './supabaseClient.js'; 
+  if (countGestores) countGestores.textContent = managers.length;
+  if (countAreas) countAreas.textContent = areasSet.size;
+  if (countPendentes) countPendentes.textContent = pendentes;
 
-const formEquipe = document.getElementById('form-equipe');
+  if (filtered.length === 0) {
+    tableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:30px;">Nenhum gestor encontrado.</td></tr>`;
+    return;
+  }
 
-formEquipe.addEventListener('submit', async (evento) => {
-    evento.preventDefault();
+  filtered.forEach(perfil => {
+    const m = perfil.membros_equipe?.[0] || {};
+    const nome = perfil.nome_completo || "Sem Nome";
+    const iniciais = nome.substring(0, 2).toUpperCase();
+    const status = m.status || "Ativo";
+    const role = m.permissao || "Gestor";
 
-    const email = document.getElementById('email').value;
-    const senha = document.getElementById('senha').value;
-    const nome = document.getElementById('nome').value;
-    const cargo = document.getElementById('cargo').value;
+    tableBody.innerHTML += `
+      <tr>
+        <td>
+          <div class="user-info">
+            <div class="user-avatar">${iniciais}</div>
+            <div class="user-details">
+              <div class="name" style="font-weight:600;">${nome}</div>
+              <div class="email" style="font-size:0.8rem; color:var(--text-muted);">${perfil.email}</div>
+            </div>
+          </div>
+        </td>
+        <td>${m.area || "-"}</td>
+        <td>${m.cargo || "-"}</td>
+        <td><span class="apprentices-count" style="font-weight:700;">${m.aprendizes_atribuidos || 0}</span></td>
+        <td><span class="badge ${role === 'Administrador' ? 'badge-admin' : 'badge-gestor'}">${role}</span></td>
+        <td>
+          <button class="badge ${status === 'Ativo' ? 'badge-active' : 'badge-pending'}" onclick="toggleStatus('${perfil.id}', '${status}')" style="border:none; cursor:pointer;">
+            ${status}
+          </button>
+        </td>
+        <td>
+          <div class="action-buttons">
+            <button class="btn-action" onclick="openEditModal('${perfil.id}')" title="Editar"><i data-lucide="pencil"></i></button>
+            <button class="btn-action" onclick="openResendModal('${perfil.id}')" title="Reenviar Convite"><i data-lucide="send"></i></button>
+            <button class="btn-action" onclick="openDeleteModal('${perfil.id}')" title="Excluir"><i data-lucide="trash-2"></i></button>
+          </div>
+        </td>
+      </tr>
+    `;
+  });
 
-    try {
-        const { data: authData, error: authError } = await supabase.auth.signUp({
-            email: email,
-            password: senha,
-        });
-        if (authError) throw authError;
+  if (window.lucide) lucide.createIcons();
+}
 
-        const userId = authData.user.id;
+// ==========================================
+// FUNÇÕES GLOBAIS (Expostas para o HTML)
+// ==========================================
+window.openModal = function(modalEl) { if (modalEl) modalEl.classList.add("active"); };
+window.closeAllModals = function() { document.querySelectorAll(".modal-overlay").forEach(m => m.classList.remove("active")); };
 
-        // Salva na tabela geral como 'equipe'
-        const { error: perfilError } = await supabase.from('perfis').insert([
-            { id: userId, nome_completo: nome, tipo: 'equipe' }
-        ]);
-        if (perfilError) throw perfilError;
+window.toggleStatus = async function(id, currentStatus) {
+  const newStatus = currentStatus === "Ativo" ? "Pendente" : "Ativo";
+  try {
+    const { error } = await supabase.from('membros_equipe').update({ status: newStatus }).eq('id', id);
+    if (error) throw error;
+    await loadManagers();
+  } catch (err) {
+    alert("Erro ao atualizar status: " + err.message);
+  }
+};
 
-        // Salva na tabela específica da equipe
-        const { error: equipeError } = await supabase.from('membros_equipe').insert([
-            { id: userId, cargo: cargo }
-        ]);
-        if (equipeError) throw equipeError;
+window.openEditModal = function(id) {
+  const perfil = managers.find(m => m.id === id);
+  if (!perfil) return;
+  const m = perfil.membros_equipe?.[0] || {};
 
-        alert('Membro da equipe cadastrado com sucesso!');
-        window.location.href = 'login.html';
+  document.getElementById("editManagerId").value = perfil.id;
+  document.getElementById("inputName").value = perfil.nome_completo || "";
+  document.getElementById("inputEmail").value = perfil.email || "";
+  document.getElementById("inputArea").value = m.area || "";
+  document.getElementById("inputCargo").value = m.cargo || "";
+  document.getElementById("selectRole").value = m.permissao || "Gestor";
 
-    } catch (error) {
-        alert("Erro no cadastro: " + error.message);
-        console.error(error);
-    }
-});
+  window.openModal(document.getElementById("formModal"));
+};
+
+window.openResendModal = function(id) {
+  window.openModal(document.getElementById("resendModal"));
+  document.getElementById("btnConfirmResend").onclick = () => {
+    window.closeAllModals();
+    window.openModal(document.getElementById("successModal"));
+  };
+};
+
+window.openDeleteModal = function(id) {
+  selectedManagerId = id;
+  document.getElementById("confirmPasswordInput").value = "";
+  const confirmModal = document.getElementById("confirmDeleteModal");
+  window.openModal(confirmModal);
+
+  document.getElementById("btnConfirmDelete").onclick = () => {
+    confirmModal.classList.remove("active");
+    window.openModal(document.getElementById("passwordModal"));
+  };
+};
+
+const btnOpenAddModal = document.getElementById("btnOpenAddModal") || document.querySelector(".btn-add-member");
+if (btnOpenAddModal) {
+  btnOpenAddModal.addEventListener("click", () => {
+    document.getElementById("managerForm")?.reset();
+    document.getElementById("editManagerId").value = "";
+    window.openModal(document.getElementById("formModal"));
+  });
+}
